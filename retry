@@ -23,6 +23,7 @@ retry()
   local min_sleep="$1"; shift
   local max_sleep="$1"; shift
   local constant_sleep="$1"; shift
+  local print_success="$1"; shift
   local fail_script="$1"; shift
   if [ -n "$VERBOSE" ]; then
     __log_out "Retry Parameters: max_tries=$max_tries min_sleep=$min_sleep max_sleep=$max_sleep constant_sleep=$constant_sleep"
@@ -47,7 +48,7 @@ retry()
     for param in "${@:2}"; do P="$P '$param'"; done
     #TODO: replace single quotes in each arg with '"'"' ?
     export RETRY_ATTEMPT=$attempts
-    bash -c "$P"
+    output="$(bash -c "$P" | tee >(cat >&1))"
     return_code=$?
     #__log_out "Process returned $return_code on attempt $attempts"
     if [ $return_code -eq 127 ]; then
@@ -67,6 +68,10 @@ retry()
     fi
   fi
 
+  if [ -n "$print_success" ] && [ $return_code -eq 0 ]; then
+    echo "$output"
+  fi
+
   exit $return_code
 }
 
@@ -84,6 +89,7 @@ Usage: $retry [options] -- execute command
     -s, --sleep=secs                 Constant sleep amount (seconds)
     -m, --min=secs                   Exponential Backoff: minimum sleep amount (seconds): Default 0.3
     -x, --max=secs                   Exponential Backoff: maximum sleep amount (seconds): Default 60
+    -p, --print                      Print the final result to stdout if the last try succeeds
     -f, --fail="script +cmds"        Fail Script: run in case of final failure
 EOF
   }
@@ -120,6 +126,7 @@ EOF
   max_tries=10
   min_sleep=0.3
   max_sleep=60.0
+  print_success=
   constant_sleep=
   fail_script=
 
@@ -146,6 +153,10 @@ EOF
               max_sleep="$2"
               shift 2
               ;;
+          -p|--print)
+              print_success=true
+              shift
+              ;;
           -f|--fail)
               fail_script="$2"
               shift 2
@@ -161,6 +172,6 @@ EOF
       esac
   done
 
-  retry "$max_tries" "$min_sleep" "$max_sleep" "$constant_sleep" "$fail_script" "$@"
+  retry "$max_tries" "$min_sleep" "$max_sleep" "$constant_sleep" "$print_success" "$fail_script" "$@"
 
 fi
